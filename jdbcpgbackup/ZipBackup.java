@@ -255,9 +255,9 @@ public final class ZipBackup {
 		Connection con = null;
 		try {
 			con = DriverManager.getConnection(jdbcUrl);
-			con.setAutoCommit(false);
+//			con.setAutoCommit(false);
 			restoreSchemaTo(schema, toSchema, con);
-			con.commit();
+//			con.commit();
 		} catch (Exception e) {
 			try {
 				if (con != null) con.rollback();
@@ -332,8 +332,9 @@ public final class ZipBackup {
 			if (toSchema == null) 
 				toSchema = Schema.createSchema(con, toSchemaName, toOwner, schemaFactory);
 			else
-				toOwner = toSchema.getOwner(); // preserve existing owner
-			setRole(con, toOwner);
+//				toOwner = toSchema.getOwner(); // preserve existing owner
+				toOwner = "tpcc";
+//			setRole(con, toOwner);
 			setSearchPath(con, toSchema);
 			timerEnd("schemas");
 
@@ -354,13 +355,13 @@ public final class ZipBackup {
 			for (ZipEntry tableEntry : tableEntries) {
 				String tableName = parseTable(tableEntry.getName());
 				Table table = tableFactory.getDbBackupObject(con, tableName, toSchema);
-				if (!table.getOwner().equals(toOwner) && !isNewSchema) {
-					setRole(con, table.getOwner());
-				}
+//				if (!table.getOwner().equals(toOwner) && !isNewSchema) {
+//					setRole(con, table.getOwner());
+//				}
 				table.restore(zipFile.getInputStream(tableEntry), con);
-				if (!table.getOwner().equals(toOwner) && !isNewSchema) {
-					setRole(con, toOwner);
-				}
+//				if (!table.getOwner().equals(toOwner) && !isNewSchema) {
+//					setRole(con, toOwner);
+//				}
 			}
 			timerEnd("table data");
 
@@ -405,22 +406,37 @@ public final class ZipBackup {
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new InputStreamReader(zipFile.getInputStream(zipEntry)));
+			StringBuffer buf = new StringBuffer();
+			String query = null;
 			for (String sql = reader.readLine(); sql != null; sql = reader.readLine()) {
 				if (isNewSchema) { // skip any role and ownership changes if restoring to new schema
 					if (sql.startsWith("SET ROLE ") || (sql.startsWith("ALTER ") && sql.contains(" OWNER TO "))) {
 						continue;
 					}
 				}
+				buf.append(sql);
+				if (sql.endsWith(";")) {
+					query = buf.toString();
+					buf.setLength(0);	
+				} else {
+					continue;
+				}
 				PreparedStatement stmt = null;
 				try {
-					stmt = con.prepareStatement(sql);
-					if (sql.startsWith("SELECT ")) {
+					
+					//在这里进行修改，不是按行进行执行，而是按照；进行分隔
+					stmt = con.prepareStatement(query);
+					if (query.startsWith("SELECT ")) {
 						stmt.executeQuery();
 					} else {
 						stmt.executeUpdate();
 					}
 				} catch (SQLException e) {
-					throw new RuntimeException("error executing sql: " + sql, e);
+					if (e.getMessage().contains("already exists")) {
+						System.out.println(query + e.getMessage());
+					} else {
+						throw new RuntimeException("error executing sql: " + query, e);
+					}
 				} finally {
 					if (stmt != null) stmt.close();
 				}

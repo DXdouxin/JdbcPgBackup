@@ -17,17 +17,26 @@ final class View extends DbBackupObject {
 		public Iterable<View> getDbBackupObjects(Connection con, Schema schema) throws SQLException {
 			List<View> views = new ArrayList<View>();
 			PreparedStatement stmt = null;
+			PreparedStatement stmt1 = null;
 			try {
 				stmt = con.prepareStatement(
 						"SELECT * FROM pg_views WHERE schemaname = ?");
 				stmt.setString(1, schema.getName());
 				ResultSet rs = stmt.executeQuery();
 				while (rs.next()) {
-					views.add(new View(rs.getString("viewname"), schema, rs.getString("viewowner"), rs.getString("definition")));
+					views.add(new View(rs.getString("viewname"), schema, rs.getString("viewowner"), rs.getString("definition"), false));
+				}
+				stmt1 = con.prepareStatement(
+						"SELECT * FROM gs_matviews WHERE schemaname = ?");
+				stmt1.setString(1, schema.getName());
+				rs = stmt1.executeQuery();
+				while (rs.next()) {
+					views.add(new View(rs.getString("matviewname"), schema, rs.getString("matviewowner"), rs.getString("definition"), true));
 				}
 				rs.close();
 			} finally {
 				if (stmt != null) stmt.close();
+				if (stmt1 != null) stmt1.close();
 			}
 			return views;
 		}
@@ -43,7 +52,7 @@ final class View extends DbBackupObject {
 				stmt.setString(2, viewName);
 				ResultSet rs = stmt.executeQuery();
 				if (rs.next())
-					view = new View(viewName, schema, rs.getString("viewowner"), rs.getString("definition"));
+					view = new View(viewName, schema, rs.getString("viewowner"), rs.getString("definition"), false);
 				else
 					throw new RuntimeException("no such view: " + viewName);
 				rs.close();
@@ -65,8 +74,9 @@ final class View extends DbBackupObject {
 			return con.prepareStatement(
 					"SELECT c.relnamespace AS schema_oid, c.relname AS viewname, pg_get_userbyid(c.relowner) AS viewowner, " +
 							"pg_get_viewdef(c.oid) AS definition " +
+							", c.relkind as relkind " +
 							"FROM pg_class c " +
-					"WHERE c.relkind = 'v'::\"char\"");
+					"WHERE c.relkind = 'v'::\"char\" or c.relkind = 'm'::\"char\"");
 			/*
 					"SELECT * FROM pg_views " +
 							"WHERE schemaname NOT LIKE 'pg_%' " +
@@ -77,26 +87,32 @@ final class View extends DbBackupObject {
 		@Override
 		protected final View newDbBackupObject(Connection con, ResultSet rs, Schema schema) throws SQLException {
 			return new View(rs.getString("viewname"), schema,
-					rs.getString("viewowner"), rs.getString("definition"));	
+					rs.getString("viewowner"), rs.getString("definition"), "m".equals(rs.getString("relkind")));	
 		}
 
 	}
-
+ 
 
 	private final String definition;
+	private final boolean isMaterView;
 
-	private View(String name, Schema schema, String owner, String definition) {
+	private View(String name, Schema schema, String owner, String definition, Boolean isMaterView) {
 		super(name, schema, owner);
 		this.definition = definition;
+		this.isMaterView = isMaterView;
 	}
 
 	@Override
 	protected StringBuilder appendCreateSql(StringBuilder buf) {
-		buf.append("CREATE VIEW ");
+		buf.append("CREATE ");
+		if(isMaterView) {
+			buf.append("MATERIALIZED ");
+		}
+		buf.append("VIEW ");
 		buf.append(getName());
 		buf.append(" AS ");
 		buf.append(definition);
-		buf.append(" ;\n");
+		buf.append("\n");
 		return buf;
 	}
 

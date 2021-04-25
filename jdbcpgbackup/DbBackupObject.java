@@ -28,15 +28,15 @@ abstract class DbBackupObject {
 
 	String getSql(DataFilter dataFilter) {
 		StringBuilder buf = new StringBuilder();
-		if (!owner.equals(schema.getOwner())) {
-			buf.append("SET ROLE ").append(owner);
-			buf.append(" ;\n");
-		}
+//		if (!owner.equals(schema.getOwner())) {
+//			buf.append("SET ROLE ").append(owner);
+//			buf.append(" ;\n");
+//		}
 		appendCreateSql(buf, dataFilter);
-		if (!owner.equals(schema.getOwner())) {
-			buf.append("SET ROLE ").append(schema.getOwner());
-			buf.append(" ;\n");
-		}
+//		if (!owner.equals(schema.getOwner())) {
+//			buf.append("SET ROLE ").append(schema.getOwner());
+//			buf.append(" ;\n");
+//		}
 		return buf.toString();
 	}
 

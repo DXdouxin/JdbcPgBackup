@@ -104,6 +104,11 @@ final class Schema extends DbBackupObject {
 						"SELECT nspname AS schemaname, pg_get_userbyid(nspowner) AS owner, oid FROM pg_namespace " +
 								"WHERE nspname NOT LIKE 'pg_%' " +
 						"AND nspname <> 'information_schema'");
+				
+//				"SELECT nspname AS schemaname, pg_get_userbyid(nspowner) AS owner, oid FROM pg_namespace " +
+//				"WHERE nspname = 'public'");
+				
+				
 				ResultSet rs = stmt.executeQuery();
 				while (rs.next()) {
 					String schemaName = rs.getString("schemaname");
